@@ -1,0 +1,61 @@
+import numpy as np
+from tensorflow.keras.applications import ResNet50
+from tensorflow.keras.applications.resnet50 import preprocess_input
+from tensorflow.keras.preprocessing import image
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, LSTM, Embedding, Dense, add
+from tensorflow.keras.utils import to_categorical
+import os
+
+# Feature extractor
+resnet_model = ResNet50(weights="imagenet", include_top=False, pooling='avg')
+def extract_features(directory):
+    features = {}
+    for img_name in os.listdir(directory):
+        filename = directory + '/' + img_name
+        img = image.load_img(filename, target_size=(224, 224))
+        img_array = image.img_to_array(img)
+        img_array = np.expand_dims(img_array, axis=0)
+        img_array = preprocess_input(img_array)
+        feature = resnet_model.predict(img_array, verbose=0)
+        features[img_name] = feature
+    return features
+
+# Load captions
+def load_captions(filepath):
+    with open(filepath, 'r') as f:
+        doc = f.read()
+    descriptions = {}
+    for line in doc.split('\n'):
+        tokens = line.split('\t')
+        if len(tokens) < 2:
+            continue
+        img_id, caption = tokens[0].split('.')[0], tokens[1]
+        if img_id not in descriptions:
+            descriptions[img_id] = []
+        descriptions[img_id].append('startseq ' + caption + ' endseq')
+    return descriptions
+
+# Prepare tokenizer
+def create_tokenizer(descriptions):
+    all_captions = []
+    for key in descriptions.keys():
+        [all_captions.append(caption) for caption in descriptions[key]]
+    tokenizer = Tokenizer()
+    tokenizer.fit_on_texts(all_captions)
+    return tokenizer
+
+# Data generator
+def data_generator(descriptions, photos, tokenizer, max_length, vocab_size, batch_size):
+    while True:
+        X1, X2, y = [], [], []
+        n = 0
+        for key, desc_list in descriptions.items():
+            photo = photos[key + '.jpg']
+            for desc in desc_list:
+                seq = tokenizer.texts_to_sequences([desc])[0]
+                for i in range(1, len(seq)):
+                    in_seq, out_seq = seq[:i], seq[i]
+                    in_seq = pad_sequences([in_seq], maxlen=max_lengt]()
