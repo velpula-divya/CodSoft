@@ -1,61 +1,54 @@
-import numpy as np
-from tensorflow.keras.applications import ResNet50
-from tensorflow.keras.applications.resnet50 import preprocess_input
-from tensorflow.keras.preprocessing import image
-from tensorflow.keras.preprocessing.text import Tokenizer
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, LSTM, Embedding, Dense, add
-from tensorflow.keras.utils import to_categorical
-import os
+#include <iostream>
+#include <string>
+#include <algorithm>
+#include <ctime>
 
-# Feature extractor
-resnet_model = ResNet50(weights="imagenet", include_top=False, pooling='avg')
-def extract_features(directory):
-    features = {}
-    for img_name in os.listdir(directory):
-        filename = directory + '/' + img_name
-        img = image.load_img(filename, target_size=(224, 224))
-        img_array = image.img_to_array(img)
-        img_array = np.expand_dims(img_array, axis=0)
-        img_array = preprocess_input(img_array)
-        feature = resnet_model.predict(img_array, verbose=0)
-        features[img_name] = feature
-    return features
+void toLowerCase(std::string &str) {
+    std::transform(str.begin(), str.end(), str.begin(), ::tolower);
+}
 
-# Load captions
-def load_captions(filepath):
-    with open(filepath, 'r') as f:
-        doc = f.read()
-    descriptions = {}
-    for line in doc.split('\n'):
-        tokens = line.split('\t')
-        if len(tokens) < 2:
-            continue
-        img_id, caption = tokens[0].split('.')[0], tokens[1]
-        if img_id not in descriptions:
-            descriptions[img_id] = []
-        descriptions[img_id].append('startseq ' + caption + ' endseq')
-    return descriptions
+int main() {
+    std::cout << "?? Chatbot: Hi! I'm a simple chatbot. Type 'bye' to exit.\n";
 
-# Prepare tokenizer
-def create_tokenizer(descriptions):
-    all_captions = []
-    for key in descriptions.keys():
-        [all_captions.append(caption) for caption in descriptions[key]]
-    tokenizer = Tokenizer()
-    tokenizer.fit_on_texts(all_captions)
-    return tokenizer
+    std::string userInput;
 
-# Data generator
-def data_generator(descriptions, photos, tokenizer, max_length, vocab_size, batch_size):
-    while True:
-        X1, X2, y = [], [], []
-        n = 0
-        for key, desc_list in descriptions.items():
-            photo = photos[key + '.jpg']
-            for desc in desc_list:
-                seq = tokenizer.texts_to_sequences([desc])[0]
-                for i in range(1, len(seq)):
-                    in_seq, out_seq = seq[:i], seq[i]
-                    in_seq = pad_sequences([in_seq], maxlen=max_lengt]()
+    while (true) {
+        std::cout << "You: ";
+        std::getline(std::cin, userInput);
+
+        // Convert input to lowercase
+        toLowerCase(userInput);
+
+        // Rule-based responses
+        if (userInput.find("hello") != std::string::npos || userInput.find("hi") != std::string::npos) {
+            std::cout << "?? Chatbot: Hello there! How can I help you today?\n";
+        } else if (userInput.find("how are you") != std::string::npos) {
+            std::cout << "?? Chatbot: I'm doing well, thanks for asking! What about you?\n";
+        } else if (userInput.find("your name") != std::string::npos) {
+            std::cout << "?? Chatbot: I'm a simple rule-based chatbot.\n";
+        } else if (userInput.find("help") != std::string::npos) {
+            std::cout << "?? Chatbot: I'm here to help. Try asking about the weather, time, or just say hi!\n";
+        } else if (userInput.find("time") != std::string::npos) {
+            time_t now = time(0);
+            tm *ltm = localtime(&now);
+            std::cout << "?? Chatbot: The current time is "
+                      << (ltm->tm_hour < 10 ? "0" : "") << ltm->tm_hour << ":"
+                      << (ltm->tm_min < 10 ? "0" : "") << ltm->tm_min << ":"
+                      << (ltm->tm_sec < 10 ? "0" : "") << ltm->tm_sec << "\n";
+        } else if (userInput.find("date") != std::string::npos) {
+            time_t now = time(0);
+            tm *ltm = localtime(&now);
+            std::cout << "?? Chatbot: Today's date is "
+                      << 1900 + ltm->tm_year << "-"
+                      << (ltm->tm_mon + 1 < 10 ? "0" : "") << ltm->tm_mon + 1 << "-"
+                      << (ltm->tm_mday < 10 ? "0" : "") << ltm->tm_mday << "\n";
+        } else if (userInput.find("bye") != std::string::npos || userInput.find("exit") != std::string::npos) {
+            std::cout << "?? Chatbot: Goodbye! Have a great day!\n";
+            break;
+        } else {
+            std::cout << "?? Chatbot: I'm sorry, I didn't understand that.\n";
+        }
+    }
+
+    return 0;
+}
