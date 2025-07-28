@@ -1,54 +1,27 @@
-#include <iostream>
-#include <string>
-#include <algorithm>
-#include <ctime>
+def chatbot():
+    print("Chatbot: Hello! I'm a simple chatbot. Type 'bye' to exit.")
 
-void toLowerCase(std::string &str) {
-    std::transform(str.begin(), str.end(), str.begin(), ::tolower);
-}
+    while True:
+        user_input = input("You: ").lower()
 
-int main() {
-    std::cout << "?? Chatbot: Hi! I'm a simple chatbot. Type 'bye' to exit.\n";
+        if "hello" in user_input or "hi" in user_input:
+            print("Chatbot: Hi there! How can I help you?")
+        
+        elif "how are you" in user_input:
+            print("Chatbot: I'm just a bot, but I'm doing fine. Thanks for asking!")
 
-    std::string userInput;
+        elif "your name" in user_input:
+            print("Chatbot: I'm RuleBot, your friendly chatbot.")
 
-    while (true) {
-        std::cout << "You: ";
-        std::getline(std::cin, userInput);
+        elif "help" in user_input:
+            print("Chatbot: I can help you with basic queries like greetings, my name, or how I feel.")
 
-        // Convert input to lowercase
-        toLowerCase(userInput);
+        elif "bye" in user_input:
+            print("Chatbot: Goodbye! Have a great day.")
+            break
+        
+        else:
+            print("Chatbot: Sorry, I didn't understand that. Try something else.")
 
-        // Rule-based responses
-        if (userInput.find("hello") != std::string::npos || userInput.find("hi") != std::string::npos) {
-            std::cout << "?? Chatbot: Hello there! How can I help you today?\n";
-        } else if (userInput.find("how are you") != std::string::npos) {
-            std::cout << "?? Chatbot: I'm doing well, thanks for asking! What about you?\n";
-        } else if (userInput.find("your name") != std::string::npos) {
-            std::cout << "?? Chatbot: I'm a simple rule-based chatbot.\n";
-        } else if (userInput.find("help") != std::string::npos) {
-            std::cout << "?? Chatbot: I'm here to help. Try asking about the weather, time, or just say hi!\n";
-        } else if (userInput.find("time") != std::string::npos) {
-            time_t now = time(0);
-            tm *ltm = localtime(&now);
-            std::cout << "?? Chatbot: The current time is "
-                      << (ltm->tm_hour < 10 ? "0" : "") << ltm->tm_hour << ":"
-                      << (ltm->tm_min < 10 ? "0" : "") << ltm->tm_min << ":"
-                      << (ltm->tm_sec < 10 ? "0" : "") << ltm->tm_sec << "\n";
-        } else if (userInput.find("date") != std::string::npos) {
-            time_t now = time(0);
-            tm *ltm = localtime(&now);
-            std::cout << "?? Chatbot: Today's date is "
-                      << 1900 + ltm->tm_year << "-"
-                      << (ltm->tm_mon + 1 < 10 ? "0" : "") << ltm->tm_mon + 1 << "-"
-                      << (ltm->tm_mday < 10 ? "0" : "") << ltm->tm_mday << "\n";
-        } else if (userInput.find("bye") != std::string::npos || userInput.find("exit") != std::string::npos) {
-            std::cout << "?? Chatbot: Goodbye! Have a great day!\n";
-            break;
-        } else {
-            std::cout << "?? Chatbot: I'm sorry, I didn't understand that.\n";
-        }
-    }
-
-    return 0;
-}
+# Run the chatbot
+chatbot()
