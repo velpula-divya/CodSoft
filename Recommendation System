@@ -1,159 +1,566 @@
-import pandas as pd    # Importing Pandas library
-import numpy as np     # Importing Numpy library
-import zipfile
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import linear_kernel
-from ast import literal_eval
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-# Temporarily remove surprise import here, will reinstall compatible numpy first
-# from surprise import SVD,Dataset,Reader,accuracy
-# from surprise.model_selection import cross_validate,KFold
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Recommendation System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
 
-#Importing data
-df1 = pd.read_csv("/content/tmdb_5000_credits.csv.zip")
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
 
-with zipfile.ZipFile("/content/archive.zip", 'r') as z:
-    with z.open('tmdb_5000_movies.csv') as f:
-        df2 = pd.read_csv(f)
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
 
-df1.head(5)
-df2.head(5)
-df1.columns = ['id','tittle','cast','crew']
-df = df2.merge(df1,on='id')
-df.head(5)
-print (df.columns)
+        .section {
+            margin-bottom: 40px;
+        }
 
-# Content-Based Filtering
-c = df['vote_average'].mean()
-print (c)
-m = df['vote_count'].quantile(0.95)
-qualified_movies = df.copy().loc[df['vote_count']>=m]
-qualified_movies.shape
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
 
-def weighted_rating(x):
-    v = x['vote_count']
-    r = x['vote_average']
-    return (v/(v+m) *r) + (m/(v+m) *c)
+        .movies-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
 
-qualified_movies['score'] = qualified_movies.apply(weighted_rating,axis=1)
-#Sort movies based on score calculated above
-qualified_movies = qualified_movies.sort_values('score', ascending=False)
+        .movie-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
 
-#Print the top 10 movies
-print("Top 10 movies based on weighted rating:")
-display(qualified_movies[['title','vote_count','vote_average','score']].head(10))
+        .movie-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
 
-# Content-Based Filtering based on overview
-df['overview'].head(5)
+        .movie-card.selected {
+            border-color: #667eea;
+            background: #e6f3ff;
+        }
 
+        .movie-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
 
-#Define a TF-IDF Vectorizer Object. Remove all english stop words such as 'the', 'a'
-tfidf = TfidfVectorizer(stop_words='english')
+        .movie-genres {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+        }
 
-#Replace NaN with an empty string
-df['overview'] = df['overview'].fillna('')
+        .rating-stars {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
 
-#Construct the required TF-IDF matrix by fitting and transforming the data
-tfidf_matrix = tfidf.fit_transform(df['overview'])
+        .star {
+            font-size: 20px;
+            color: #ddd;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
 
-#Output the shape of tfidf_matrix
-print("Shape of TF-IDF matrix:")
-print(tfidf_matrix.shape)
+        .star.active {
+            color: #ffd700;
+        }
 
+        .star:hover {
+            color: #ffd700;
+        }
 
-#Compute cosine similarity using tfidf_matrix
-cosine_sim = linear_kernel(tfidf_matrix , tfidf_matrix)
-indices = pd.Series(df.index, index=df['title']).drop_duplicates()
+        .controls {
+            text-align: center;
+            margin: 30px 0;
+        }
 
-# Function that takes in movie title as input and outputs most similar movies
-def get_recommendations(title, cosine_sim=cosine_sim):
-    # Get the index of the movie that matches the title
-    idx = indices[title]
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 0 10px;
+            transition: background 0.3s ease;
+        }
 
-    # Get the pairwsie similarity scores of all movies with that movie
-    sim_scores = list(enumerate(cosine_sim[idx]))
+        button:hover {
+            background: #5a67d8;
+        }
 
-    # Sort the movies based on the similarity scores
-    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
 
-    # Get the scores of the 10 most similar movies
-    sim_scores = sim_scores[1:11]
+        .recommendations {
+            background: #f0f7ff;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
 
-    # Get the movie indices
-    movie_indices = [i[0] for i in sim_scores]
+        .recommendation-item {
+            background: white;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
 
-    # Return the top 10 most similar movies
-    return df2['title'].iloc[movie_indices]
+        .recommendation-info {
+            flex: 1;
+        }
 
-print("\nRecommendations based on overview for 'The Dark Knight Rises':")
-display(get_recommendations('The Dark Knight Rises'))
+        .recommendation-score {
+            background: #667eea;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
 
-# Content-Based Filtering based on metadata
+        .filter-section {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
 
-features = ['cast','crew','keywords','genres']
+        select {
+            padding: 8px 12px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+        }
 
-for i in features:
-    df[i] = df[i].apply(literal_eval)
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
 
-# Get the director's name from the crew feature. If director is not listed, return NaN
-def get_director(n):
-    for i in n:
-        if i['job'] == 'Director':
-            return i['name']
-    return np.nan
+        .stat-card {
+            background: #667eea;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
 
-#Function for getting top 3 elements from the list
-def get_list(x):
-    if isinstance(x, list):
-        names = [i['name'] for i in x]
-        #Check if more than 3 elements exist. If yes, return only first three. If no, return entire list.
-        if len(names) > 3:
-            names = names[:3]
-        return names
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+        }
 
-    #Return empty list in case of missing/malformed data
-    return []
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
 
-# Define new director, cast, genres and keywords features that are in a suitable form.
-df['director'] = df['crew'].apply(get_director)
-features = ['cast','keywords','genres']
-for i in features:
-    df[i] = df[i].apply(get_list)
+        .empty-state {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 Movie Recommendation System</h1>
+        
+        <div class="section">
+            <h2>Step 1: Rate Some Movies</h2>
+            <div class="filter-section">
+                <select id="genreFilter">
+                    <option value="">All Genres</option>
+                </select>
+                <select id="sortBy">
+                    <option value="title">Sort by Title</option>
+                    <option value="year">Sort by Year</option>
+                    <option value="rating">Sort by Rating</option>
+                </select>
+            </div>
+            <div class="movies-grid" id="moviesGrid"></div>
+        </div>
 
-#Print the new features
-print("\nSample of cleaned metadata features:")
-display(df[['title', 'cast', 'director', 'keywords', 'genres']].head(3))
+        <div class="controls">
+            <button onclick="getRecommendations()" id="recommendBtn">Get My Recommendations</button>
+            <button onclick="clearRatings()">Clear All Ratings</button>
+        </div>
 
-# Function to convert all strings to lower case and strip names of spaces
-def clean_data(x):
-    if isinstance(x, list):
-        return [str.lower(i.replace(" ", "")) for i in x]
-    else:
-        #Check if director exists. If not, return empty string
-        if isinstance(x, str):
-            return str.lower(x.replace(" ", ""))
-        else:
-            return ''
+        <div class="section">
+            <h2>Your Personalized Recommendations</h2>
+            <div class="recommendations" id="recommendations">
+                <div class="empty-state">
+                    Rate at least 3 movies above to get personalized recommendations!
+                </div>
+            </div>
+        </div>
 
-#Applying clean data function
-features = ['cast','keywords','genres','director']
+        <div class="stats" id="stats"></div>
+    </div>
 
-for i in features:
-    df[i] = df[i].apply(clean_data)
+    <script>
+        const movies = [
+            { id: 1, title: "The Dark Knight", genres: ["Action", "Crime", "Drama"], year: 2008, avgRating: 4.8 },
+            { id: 2, title: "Inception", genres: ["Action", "Sci-Fi", "Thriller"], year: 2010, avgRating: 4.7 },
+            { id: 3, title: "The Shawshank Redemption", genres: ["Drama"], year: 1994, avgRating: 4.9 },
+            { id: 4, title: "Pulp Fiction", genres: ["Crime", "Drama"], year: 1994, avgRating: 4.6 },
+            { id: 5, title: "The Matrix", genres: ["Action", "Sci-Fi"], year: 1999, avgRating: 4.5 },
+            { id: 6, title: "Goodfellas", genres: ["Crime", "Drama"], year: 1990, avgRating: 4.6 },
+            { id: 7, title: "The Godfather", genres: ["Crime", "Drama"], year: 1972, avgRating: 4.9 },
+            { id: 8, title: "Forrest Gump", genres: ["Drama", "Romance"], year: 1994, avgRating: 4.4 },
+            { id: 9, title: "The Lion King", genres: ["Animation", "Family"], year: 1994, avgRating: 4.3 },
+            { id: 10, title: "Titanic", genres: ["Drama", "Romance"], year: 1997, avgRating: 4.2 },
+            { id: 11, title: "Avatar", genres: ["Action", "Sci-Fi"], year: 2009, avgRating: 4.1 },
+            { id: 12, title: "The Avengers", genres: ["Action", "Adventure"], year: 2012, avgRating: 4.3 },
+            { id: 13, title: "Jurassic Park", genres: ["Adventure", "Sci-Fi"], year: 1993, avgRating: 4.4 },
+            { id: 14, title: "Star Wars", genres: ["Adventure", "Sci-Fi"], year: 1977, avgRating: 4.6 },
+            { id: 15, title: "Casablanca", genres: ["Drama", "Romance"], year: 1942, avgRating: 4.7 },
+            { id: 16, title: "The Silence of the Lambs", genres: ["Crime", "Horror", "Thriller"], year: 1991, avgRating: 4.5 },
+            { id: 17, title: "Schindler's List", genres: ["Drama", "History"], year: 1993, avgRating: 4.8 },
+            { id: 18, title: "Raiders of the Lost Ark", genres: ["Action", "Adventure"], year: 1981, avgRating: 4.5 },
+            { id: 19, title: "The Wizard of Oz", genres: ["Adventure", "Family", "Fantasy"], year: 1939, avgRating: 4.2 },
+            { id: 20, title: "Citizen Kane", genres: ["Drama"], year: 1941, avgRating: 4.4 }
+        ];
 
-def create_soup(x):
-    return ' '.join(x['keywords'])+' '+' '.join(x['cast'])+' '+' '.join(x['director'])+' '+' '.join(x['genres'])
+        let userRatings = {};
+        let filteredMovies = [...movies];
 
-df['soup'] = df.apply(create_soup,axis = 1)
+        function initializeApp() {
+            populateGenreFilter();
+            renderMovies();
+            updateStats();
+        }
 
-count = CountVectorizer(stop_words = 'english')
-cv_matrix = count.fit_transform(df['soup'])
+        function populateGenreFilter() {
+            const genres = [...new Set(movies.flatMap(movie => movie.genres))].sort();
+            const genreFilter = document.getElementById('genreFilter');
+            
+            genres.forEach(genre => {
+                const option = document.createElement('option');
+                option.value = genre;
+                option.textContent = genre;
+                genreFilter.appendChild(option);
+            });
 
-# Compute the Cosine Similarity matrix based on the count_matrix
-cosine_sim2 = cosine_similarity(cv_matrix,cv_matrix)
-indices = pd.Series(df.index,index=df['title'])
+            genreFilter.addEventListener('change', filterAndSort);
+            document.getElementById('sortBy').addEventListener('change', filterAndSort);
+        }
 
-print("\nRecommendations based on metadata for 'The Avengers':")
-display(get_recommendations('The Avengers',cosine_sim2))
+        function filterAndSort() {
+            const genreFilter = document.getElementById('genreFilter').value;
+            const sortBy = document.getElementById('sortBy').value;
+
+            filteredMovies = movies.filter(movie => {
+                return !genreFilter || movie.genres.includes(genreFilter);
+            });
+
+            filteredMovies.sort((a, b) => {
+                switch(sortBy) {
+                    case 'year':
+                        return b.year - a.year;
+                    case 'rating':
+                        return b.avgRating - a.avgRating;
+                    default:
+                        return a.title.localeCompare(b.title);
+                }
+            });
+
+            renderMovies();
+        }
+
+        function renderMovies() {
+            const grid = document.getElementById('moviesGrid');
+            grid.innerHTML = '';
+
+            filteredMovies.forEach(movie => {
+                const movieCard = document.createElement('div');
+                movieCard.className = 'movie-card';
+                movieCard.innerHTML = `
+                    <div class="movie-title">${movie.title}</div>
+                    <div class="movie-genres">${movie.genres.join(', ')} • ${movie.year}</div>
+                    <div class="rating-stars" data-movie-id="${movie.id}">
+                        ${[1,2,3,4,5].map(star => 
+                            <span class="star" data-rating="${star}">★</span>
+                        ).join('')}
+                    </div>
+                    <div>Avg: ${movie.avgRating}/5</div>
+                `;
+
+                const stars = movieCard.querySelectorAll('.star');
+                stars.forEach(star => {
+                    star.addEventListener('click', () => rateMovie(movie.id, parseInt(star.dataset.rating)));
+                    star.addEventListener('mouseenter', () => highlightStars(stars, parseInt(star.dataset.rating)));
+                    star.addEventListener('mouseleave', () => resetStars(movie.id, stars));
+                });
+
+                if (userRatings[movie.id]) {
+                    highlightStars(stars, userRatings[movie.id]);
+                    movieCard.classList.add('selected');
+                }
+
+                grid.appendChild(movieCard);
+            });
+
+            updateRecommendButton();
+        }
+
+        function highlightStars(stars, rating) {
+            stars.forEach((star, index) => {
+                star.classList.toggle('active', index < rating);
+            });
+        }
+
+        function resetStars(movieId, stars) {
+            const userRating = userRatings[movieId] || 0;
+            highlightStars(stars, userRating);
+        }
+
+        function rateMovie(movieId, rating) {
+            userRatings[movieId] = rating;
+            renderMovies();
+            updateStats();
+        }
+
+        function updateRecommendButton() {
+            const ratedCount = Object.keys(userRatings).length;
+            const btn = document.getElementById('recommendBtn');
+            btn.disabled = ratedCount < 3;
+            btn.textContent = ratedCount < 3 ? 
+                Rate ${3 - ratedCount} more movies : 'Get My Recommendations';
+        }
+
+        function getRecommendations() {
+            const recommendations = generateRecommendations();
+            displayRecommendations(recommendations);
+        }
+
+        function generateRecommendations() {
+            const unratedMovies = movies.filter(movie => !userRatings[movie.id]);
+            const recommendations = [];
+
+            unratedMovies.forEach(movie => {
+                let score = 0;
+                let similaritySum = 0;
+
+                const contentScore = calculateContentBasedScore(movie);
+                const collaborativeScore = calculateCollaborativeScore(movie);
+
+                score = (contentScore * 0.6) + (collaborativeScore * 0.4);
+
+                if (score > 0) {
+                    recommendations.push({
+                        movie: movie,
+                        score: Math.min(score, 5),
+                        reason: getRecommendationReason(movie, contentScore, collaborativeScore)
+                    });
+                }
+            });
+
+            return recommendations
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 8);
+        }
+
+        function calculateContentBasedScore(movie) {
+            const userPreferences = getUserPreferences();
+            let score = 0;
+
+            movie.genres.forEach(genre => {
+                if (userPreferences.genres[genre]) {
+                    score += userPreferences.genres[genre] * 0.8;
+                }
+            });
+
+            const yearDiff = Math.abs(movie.year - userPreferences.avgYear);
+            const yearScore = Math.max(0, 1 - (yearDiff / 50));
+            score += yearScore * 0.5;
+
+            const ratingScore = movie.avgRating / 5;
+            score += ratingScore * 0.7;
+
+            return Math.min(score, 5);
+        }
+
+        function calculateCollaborativeScore(movie) {
+            const ratedMovies = Object.keys(userRatings).map(id => parseInt(id));
+            let totalSimilarity = 0;
+            let weightedRatingSum = 0;
+
+            ratedMovies.forEach(ratedId => {
+                const ratedMovie = movies.find(m => m.id === ratedId);
+                const similarity = calculateMovieSimilarity(movie, ratedMovie);
+                
+                if (similarity > 0.3) {
+                    totalSimilarity += similarity;
+                    weightedRatingSum += userRatings[ratedId] * similarity;
+                }
+            });
+
+            return totalSimilarity > 0 ? (weightedRatingSum / totalSimilarity) : movie.avgRating;
+        }
+
+        function calculateMovieSimilarity(movie1, movie2) {
+            const genres1 = new Set(movie1.genres);
+            const genres2 = new Set(movie2.genres);
+            const intersection = new Set([...genres1].filter(g => genres2.has(g)));
+            const union = new Set([...genres1, ...genres2]);
+            
+            const genreSimilarity = intersection.size / union.size;
+            const yearSimilarity = 1 - (Math.abs(movie1.year - movie2.year) / 100);
+            const ratingSimilarity = 1 - (Math.abs(movie1.avgRating - movie2.avgRating) / 5);
+
+            return (genreSimilarity * 0.5) + (yearSimilarity * 0.3) + (ratingSimilarity * 0.2);
+        }
+
+        function getUserPreferences() {
+            const preferences = { genres: {}, avgYear: 0 };
+            const ratedMovies = Object.keys(userRatings).map(id => parseInt(id));
+            
+            let totalYear = 0;
+            
+            ratedMovies.forEach(movieId => {
+                const movie = movies.find(m => m.id === movieId);
+                const rating = userRatings[movieId];
+                
+                movie.genres.forEach(genre => {
+                    preferences.genres[genre] = (preferences.genres[genre] || 0) + (rating / 5);
+                });
+                
+                totalYear += movie.year;
+            });
+
+            preferences.avgYear = ratedMovies.length > 0 ? totalYear / ratedMovies.length : new Date().getFullYear();
+
+            Object.keys(preferences.genres).forEach(genre => {
+                preferences.genres[genre] /= ratedMovies.length;
+            });
+
+            return preferences;
+        }
+
+        function getRecommendationReason(movie, contentScore, collaborativeScore) {
+            const preferences = getUserPreferences();
+            const topGenres = Object.entries(preferences.genres)
+                .sort(([,a], [,b]) => b - a)
+                .slice(0, 2)
+                .map(([genre]) => genre);
+
+            const matchingGenres = movie.genres.filter(g => topGenres.includes(g));
+
+            if (matchingGenres.length > 0) {
+                return You seem to enjoy ${matchingGenres.join(' and ')} movies;
+            }
+
+            if (collaborativeScore > contentScore) {
+                return Similar to movies you've rated highly;
+            }
+
+            return Highly rated ${movie.genres[0]} movie;
+        }
+
+        function displayRecommendations(recommendations) {
+            const container = document.getElementById('recommendations');
+            
+            if (recommendations.length === 0) {
+                container.innerHTML = '<div class="empty-state">No recommendations available. Try rating more movies!</div>';
+                return;
+            }
+
+            container.innerHTML = recommendations.map(rec => `
+                <div class="recommendation-item">
+                    <div class="recommendation-info">
+                        <div style="font-weight: bold; margin-bottom: 5px;">${rec.movie.title}</div>
+                        <div style="color: #666; font-size: 0.9em;">${rec.movie.genres.join(', ')} • ${rec.movie.year}</div>
+                        <div style="color: #888; font-size: 0.8em; font-style: italic;">${rec.reason}</div>
+                    </div>
+                    <div class="recommendation-score">${rec.score.toFixed(1)}</div>
+                </div>
+            `).join('');
+        }
+
+        function clearRatings() {
+            userRatings = {};
+            renderMovies();
+            updateStats();
+            document.getElementById('recommendations').innerHTML = 
+                '<div class="empty-state">Rate at least 3 movies above to get personalized recommendations!</div>';
+        }
+
+        function updateStats() {
+            const ratedCount = Object.keys(userRatings).length;
+            const avgRating = ratedCount > 0 ? 
+                Object.values(userRatings).reduce((a, b) => a + b, 0) / ratedCount : 0;
+            
+            const preferences = getUserPreferences();
+            const topGenre = Object.entries(preferences.genres)
+                .sort(([,a], [,b]) => b - a)[0]?.[0] || 'None';
+
+            document.getElementById('stats').innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-number">${ratedCount}</div>
+                    <div class="stat-label">Movies Rated</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${avgRating.toFixed(1)}</div>
+                    <div class="stat-label">Average Rating</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${topGenre}</div>
+                    <div class="stat-label">Favorite Genre</div>
+                </div>
+            `;
+        }
+
+        initializeApp();
+    </script>
+</body>
+</html>
